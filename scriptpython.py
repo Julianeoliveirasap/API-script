@@ -25,7 +25,7 @@ BASE_URL = "https://api.cnpja.com"
 # 3) Input/output files
 #    INPUT_CSV  = CRM file you want to enrich
 #    OUTPUT_CSV = final enriched file with all API fields
-INPUT_CSV = "Brazil - Data Research (Juliane)(CRM).csv"
+INPUT_CSV = "CRM.csv"
 OUTPUT_CSV = "CRMdadosatualizados.csv"
 
 # 4) Name of the CNPJ column in your CSV
