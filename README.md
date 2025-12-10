@@ -89,96 +89,188 @@ matriz_ou_filial
 cnpj_original
 cnpj_normalizado
 
-# CNPJá CRM Enrichment (Python Automation)
+## 🚀 CNPJá CRM Enrichment – Python Automation
 
-This repository contains a Python-based automation that enriches CRM datasets using the **commercial CNPJá API**, a Brazilian company information service that provides structured business data based on company CNPJ identifiers.  
-
-The purpose of this project is to automatically query and extract key business attributes such as legal name, trade name, registration status, CNAE classification, operating address, legal nature, and company size. All results are appended to the original CRM dataset and saved into a new enriched CSV file.
+This project automates the enrichment of CRM datasets using the **commercial CNPJá API**, which provides official and structured information about Brazilian companies based on their CNPJ identification. The script processes a CRM file, normalizes each CNPJ, retrieves company data through the API, and generates a fully enriched output CSV containing identity, legal, classification, address, status, and operational fields.
 
 ---
 
-## 🧭 Motivation
+## 🧭 Overview
 
-Large CRM databases often contain outdated or incomplete company records. CNPJ-based enrichment enables:
-- validation of company identity
-- confirmation of registration status
-- extraction of key classification information (CNAE)
-- identifying headquarter vs branch
-- improving segmentation and analytics
-- improving targeting accuracy
-- reducing manual verification time
+This automation receives a CSV containing company CNPJs, performs proper normalization of the CNPJ string, makes authenticated API calls using your commercial CNPJá API key, extracts structured fields from the response JSON, and appends them into your original dataset. It also includes retry logic, rate limiting control, error detection, and a dedicated subroutine to reprocess only failed records.
 
 ---
 
-## 🏗 Project Scope
+## 🔑 Requirements
 
-This project focuses on:
-- Automated CNPJ enrichment
-- Error handling and retry logic
-- Normalization and data cleaning
-- Structured extraction of API response fields
-- Data export to enriched CSV
-- Automatic retry of failed API calls
+To use this script, the following items are required:
 
-It does **not** include:
-- User interface
-- Dashboard/report generation
-- Database storage
-- CRM integration API
-
-However, the script is written in a modular way to allow future integration into larger systems.
+- Python 3.9 or above
+- Commercial CNPJá API access and an active subscription
+- Input CSV file containing CNPJs
+- Internet connectivity to reach the CNPJá platform
+- Installed Python packages: `pandas`, `requests`, `pathlib`
 
 ---
 
-## 🔍 What this script extracts
+## 🔐 How to Obtain the CNPJá API Key
 
-From each CNPJ lookup the script collects:
+Before running the script, you must access the CNPJá platform and obtain your commercial API key.
 
-### Company attributes
-- official business name (razao social)
-- trade name (alias)
-- opening date
-- legal nature
-- registration status
-- company size / porte
+Follow these steps:
 
-### Classification
-- primary CNAE activity code
-- CNAE activity description
+1. Visit the official CNPJá website using your browser.
+2. Create an account or sign into your commercial environment.
+3. Locate the API section, usually under “Integrações”, “Chaves”, “Token”, or “API”.
+4. Copy your personal API key string exactly as provided.
+5. Paste it inside the script by replacing the placeholder value.
 
-### Location fields
-- street, number, district
-- city, state, ZIP
-- additional address information
-
-### Metadata
-- HTTP status
-- success flag
-- CNPJ validity
-- error details
-- original CNPJ provided
+Important: **do not commit your real API key to GitHub**. Prefer using environment variables in production environments.
 
 ---
 
-## ⚙️ How the Automation Works (high-level)
+# 🧠 How the Script Works (Conceptual Flow)
 
-The script follows the steps below:
+This automation follows the sequence below:
 
-1. Load input CSV (CRM data)
-2. Normalize each CNPJ into digits-only format
-3. Validate 14-digit structure
-4. Call CNPJá API
-5. Extract JSON fields into Python dict
-6. Append results to a list of enriched objects
-7. Merge enriched data into original dataset
-8. Export final CSV
-9. Log successes and errors
-10. Retry failures if needed
+1. Load the chosen input CSV file into memory.
+2. Normalize each CNPJ value into a clean 14-digit format.
+3. Validate CNPJs and automatically discard malformed ones.
+4. Build headers including your commercial API KEY.
+5. Configure query parameters such as cache strategy and additional data flags.
+6. Execute the `/office/:taxId` request for each valid CNPJ.
+7. Apply retry logic when encountering DNS or timeout errors.
+8. Handle status code `429` by pausing and retrying later.
+9. Extract relevant fields from the JSON response.
+10. Append key attributes back into the CRM dataframe.
+11. Export a new enriched CSV.
+12. Optionally reprocess only the unsuccessful rows.
 
 ---
 
-## 🧠 Why normalization matters
+## 🧩 Data Extracted from the API
 
-CNPJ digits may appear formatted like:
+The enrichment process retrieves the following:
+
+### Business Identity
+- Corporate name
+- Trade name
+- Opening date
+- Legal nature
+
+### Regulatory and Status Fields
+- Registration status
+- Status date
+- Branch or headquarters indicator
+
+### Company Size (Porte)
+- Identification code
+- Acronym
+- Descriptive label
+
+### CNAE Classification
+- Activity code
+- Activity description
+
+### Address Structure
+- Street
+- Number
+- District
+- City
+- State
+- ZIP
+
+Additionally, each record receives technical metadata including:
+- API success indicator
+- HTTP status code
+- Error message when applicable
+- Original CNPJ value
+- Normalized CNPJ value
+
+---
+
+## 🛠 Internal Logic and Functions
+
+### CNPJ Normalization
+A dedicated function removes dots, slashes, dashes and validates the length of the resulting numeric string. Any non-valid CNPJ is automatically logged and skipped from API calls.
+
+### Header Assembly
+A function composes the HTTP headers for every request, injecting your CNPJá key into the `Authorization` header exactly as required by the official API documentation.
+
+### Query Parameter Configuration
+A function creates default parameters for caching strategies, staleness tolerances, and optional flags related to simplified taxation formats and geolocation responses.
+
+### API Request + Retry Handling
+A separate function sends requests, captures network errors, triggers exponential backoff, detects HTTP errors, handles 429 throttling, parses JSON data, and produces a standardized dictionary representing each individual response.
+
+### Field Extraction and Data Mapping
+A specialized function translates the API JSON into a consistent set of CRM fields to be merged into your dataset, ensuring unified structure regardless of errors or missing fields.
+
+### Final CSV Construction
+The main routine performs the join operation, preserving all original CRM columns while appending every enrichment field and technical indicator.
+
+### Reprocessing of Failed Records
+An additional function reopens the output CSV, filters rows where `api_success != True`, and triggers a new set of API requests only for failed entries.
+
+---
+
+## ⏱ Rate Limiting and API Throttling
+
+The script implements a logical time window that counts requests per minute. When the configured maximum value is reached, execution pauses until the next minute begins. This prevents blocking, excessive credit consumption, and repeated 429 errors on the CNPJá server side.
+
+---
+
+## ⚠ Error Handling
+
+The code performs:
+
+- Invalid CNPJ detection
+- Network error handling
+- DNS resolution detection
+- JSON parsing fallback
+- 429 multiple retry attempts
+- Return of unified response structure
+- Graceful error continuation
+
+Failures do not interrupt the entire batch and are recorded for later recovery.
+
+---
+
+## 📂 Output
+
+The final exported CSV includes:
+
+- All original CRM fields
+- All extracted information
+- Status columns describing each request
+- Metadata for troubleshooting and analysis
+
+This process results in a transformed CRM with official enriched business data, ready for analytics, segmentation, compliance, and strategic decision-making.
+
+---
+
+## 🚨 Security Notes
+
+- Never publish your API key in public repositories
+- Consider using `.env` files or secret managers
+- Be mindful that API requests may consume credits
+- Certificates and specialized queries may consume additional credits
+
+---
+
+## 📈 Practical Use Cases
+
+- CRM enrichment and validation
+- Lead qualification and segmentation
+- Market mapping and classification
+- Risk and compliance checks
+- Data quality improvement
+- B2B targeting analytics
+
+---
+
+## 🤝 Support and Issues
+
+If you encounter problems or believe additional fields should be included, please submit an issue describing your use case so future enhancements can be considered.
 
 
